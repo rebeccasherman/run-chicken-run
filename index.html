@@ -48,6 +48,7 @@
     position: absolute;
     top: 38px;
     left: 0; right: 0; bottom: 0;
+    z-index: 6;
     background: rgba(0,0,0,0.82);
     display: flex;
     flex-direction: column;
@@ -77,24 +78,25 @@
   .btn-gold { background: #f39c12; color: #fff; }
   .btn-red { background: #e74c3c; color: #fff; }
   .btn-blue { background: #2980b9; color: #fff; }
+  /* D-pad floats over the bottom of the canvas — always within the visible game area */
   #mobileControls {
     display: none;
-    width: 100%;
-    max-width: 480px;
-    background: rgba(0,0,0,0.5);
-    border-radius: 0 0 8px 8px;
-    padding: 8px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-    justify-content: center;
-    gap: 8px;
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    background: rgba(0,0,0,0.35);
+    border-radius: 12px;
+    padding: 6px;
   }
-  .dpad { display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px; gap: 4px; }
+  .dpad { display: grid; grid-template-columns: 54px 54px 54px; grid-template-rows: 54px 54px 54px; gap: 4px; }
   .dpad-btn {
-    background: rgba(255,255,255,0.15);
-    border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 8px;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 10px;
     color: #fff;
-    font-size: 1.3em;
+    font-size: 1.4em;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -102,14 +104,14 @@
     user-select: none;
     -webkit-user-select: none;
   }
-  .dpad-btn:active { background: rgba(255,255,255,0.35); }
+  .dpad-btn:active { background: rgba(255,255,255,0.45); }
   .dpad-empty { background: transparent; border: none; }
   @media (max-width: 520px) {
-    #mobileControls { display: flex; }
+    #mobileControls { display: block; }
     #hud { font-size: 12px; }
   }
   @media (pointer: coarse) {
-    #mobileControls { display: flex; }
+    #mobileControls { display: block; }
   }
 </style>
 </head>
