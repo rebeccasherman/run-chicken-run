@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Run Chicken Run</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Arial', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #gameContainer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 480px;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 8px 8px 0 0;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .hud-item { display: flex; align-items: center; gap: 4px; }
+  #canvas {
+    display: block;
+    border: 3px solid #444;
+    cursor: pointer;
+  }
+  #overlay {
+    position: absolute;
+    top: 38px;
+    left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.82);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    padding: 20px;
+    border-radius: 0 0 6px 6px;
+    z-index: 10;
+  }
+  #overlay h1 { font-size: 2em; color: #ffd700; text-shadow: 2px 2px 4px #000; margin-bottom: 10px; }
+  #overlay h2 { font-size: 1.4em; color: #ffd700; margin-bottom: 10px; }
+  #overlay p { font-size: 0.95em; margin-bottom: 8px; line-height: 1.4; color: #ddd; }
+  .btn {
+    margin: 8px 4px;
+    padding: 12px 28px;
+    font-size: 1em;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .btn:active { transform: scale(0.96); opacity: 0.85; }
+  .btn-green { background: #27ae60; color: #fff; }
+  .btn-gold { background: #f39c12; color: #fff; }
+  .btn-red { background: #e74c3c; color: #fff; }
+  .btn-blue { background: #2980b9; color: #fff; }
+  #mobileControls {
+    display: none;
+    width: 100%;
+    max-width: 480px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 0 0 8px 8px;
+    padding: 8px;
+    justify-content: center;
+    gap: 8px;
+  }
+  .dpad { display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px; gap: 4px; }
+  .dpad-btn {
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1.3em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .dpad-btn:active { background: rgba(255,255,255,0.35); }
+  .dpad-empty { background: transparent; border: none; }
+  @media (max-width: 520px) {
+    #mobileControls { display: flex; }
+    #hud { font-size: 12px; }
+  }
+  @media (pointer: coarse) {
+    #mobileControls { display: flex; }
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div id="hud">
+    <div class="hud-item">🐔 Level: <span id="hudLevel">1</span></div>
+    <div class="hud-item">🌾 Seeds: <span id="hudSeeds">0</span>/5</div>
+    <div class="hud-item">❤️ Lives: <span id="hudLives">3</span></div>
+    <div class="hud-item">🪙 Coins: <span id="hudCoins">0</span></div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">
+    <h1>🐔 Run Chicken Run!</h1>
+    <p>Cross roads and train tracks.<br>Collect 5 🌾 seeds, then reach the 🏁 finish line!</p>
+    <p>❤️ 3 lives per level · 🪙 10 coins per level<br>Revive at level start for 20 coins</p>
+    <p style="font-size:0.85em; color:#aaa;">Arrow keys / WASD or D-pad to move</p>
+    <button class="btn btn-green" onclick="startGame()">▶ Play</button>
+  </div>
+  <div id="mobileControls">
+    <div class="dpad">
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" id="btnUp">▲</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" id="btnLeft">◄</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" id="btnRight">►</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" id="btnDown">▼</div>
+      <div class="dpad-empty"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Audio ──────────────────────────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
+
+function playTone(freq, type, dur, vol=0.3, delay=0) {
+  resumeAC();
+  const o = AC.createOscillator();
+  const g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + delay);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + delay + dur);
+  o.start(AC.currentTime + delay);
+  o.stop(AC.currentTime + delay + dur);
+}
+
+function sfxCluck() {
+  playTone(400,'sawtooth',0.08,0.25);
+  playTone(600,'sawtooth',0.08,0.15,0.05);
+  playTone(500,'sawtooth',0.1,0.2,0.1);
+}
+function sfxDie() {
+  for(let i=0;i<6;i++) playTone(300-i*40,'sawtooth',0.12,0.3,i*0.07);
+}
+function sfxSeed() {
+  playTone(880,'sine',0.1,0.3);
+  playTone(1100,'sine',0.1,0.25,0.07);
+}
+function sfxLevelUp() {
+  [523,659,784,1047].forEach((f,i)=>playTone(f,'sine',0.2,0.4,i*0.12));
+}
+function sfxHorn() {
+  playTone(180,'square',0.15,0.35);
+}
+function sfxTrain() {
+  playTone(120,'sawtooth',0.18,0.4);
+  playTone(240,'sawtooth',0.1,0.2,0.05);
+}
+function sfxCoin() {
+  playTone(1046,'sine',0.08,0.25);
+  playTone(1318,'sine',0.08,0.2,0.06);
+}
+function sfxRevive() {
+  [262,330,392,523].forEach((f,i)=>playTone(f,'triangle',0.18,0.35,i*0.1));
+}
+
+function startMusic() {}
+function stopMusic() {}
+
+// ── Canvas Setup ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+
+const TILE = 48;
+const COLS = 9;
+const ROWS = 13;
+let W, H;
+
+function resize() {
+  const maxW = Math.min(window.innerWidth, 520);
+  const scale = Math.min(1, maxW / (COLS * TILE));
+  W = Math.round(COLS * TILE * scale);
+  H = Math.round(ROWS * TILE * scale);
+  canvas.width = W;
+  canvas.height = H;
+}
+resize();
+window.addEventListener('resize', () => { resize(); if(gameState!=='playing') drawFrame(); });
+
+// ── Game State ─────────────────────────────────────────────────────────────
+let gameState = 'menu'; // menu, playing, dead, levelup, gameover, revive
+let level = 1, coins = 0, lives = 3, seeds = 0;
+let chicken = { col: 4, row: ROWS-1 };
+let collected = [];
+let lanes = [];
+let seedPositions = [];
+let lastMove = 0;
+const MOVE_DELAY = 160; // ms between moves
+let animFrame;
+let moveQueue = { up:false, down:false, left:false, right:false };
+
+// ── Level Generation ───────────────────────────────────────────────────────
+function getLaneConfig(lvl) {
+  // row 0 = finish, rows 1..ROWS-2 = lanes/grass, row ROWS-1 = start (safe)
+  const laneRows = ROWS - 2; // rows 1 to ROWS-2
+  // More dangerous lanes as levels increase
+  const numRoad = Math.min(3 + Math.floor(lvl/10), 6);
+  const numTrain = Math.min(1 + Math.floor(lvl/15), 3);
+  const numSafe = laneRows - numRoad - numTrain;
+  let types = [];
+  for(let i=0;i<numSafe;i++) types.push('grass');
+  for(let i=0;i<numRoad;i++) types.push('road');
+  for(let i=0;i<numTrain;i++) types.push('train');
+  // shuffle
+  for(let i=types.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [types[i],types[j]]=[types[j],types[i]];
+  }
+  // build lane objects
+  const result = [];
+  for(let r=1;r<ROWS-1;r++) {
+    const type = types[r-1] || 'grass';
+    if (type === 'grass') {
+      result.push({ row:r, type, speed:0, vehicleW:0, vehicles:[], gap:0 });
+      continue;
+    }
+    const speed = (0.6 + lvl*0.04 + Math.random()*0.5) * (Math.random()<0.5?1:-1);
+    const vehicleW = type==='train' ? TILE*2.2 : TILE*1.3;
+    const gap = type==='train' ? TILE*6 + Math.random()*TILE*4 : TILE*2.5 + Math.random()*TILE*3;
+    const numV = Math.max(1, Math.floor((COLS*TILE + gap) / (vehicleW + gap)));
+    const vehicles = [];
+    for(let v=0;v<numV;v++) {
+      vehicles.push({ x: v*(vehicleW+gap) });
+    }
+    result.push({ row:r, type, speed, vehicleW, vehicles, gap });
+  }
+  return result;
+}
+
+function placeSeedPositions() {
+  const positions = [];
+  const usedCells = new Set();
+  usedCells.add(`4,${ROWS-1}`); // start
+  while(positions.length < 5) {
+    const col = Math.floor(Math.random()*COLS);
+    const row = 1 + Math.floor(Math.random()*(ROWS-2));
+    const key = `${col},${row}`;
+    if (!usedCells.has(key)) {
+      usedCells.add(key);
+      positions.push({col, row});
+    }
+  }
+  return positions;
+}
+
+function initLevel() {
+  chicken = { col: 4, row: ROWS-1 };
+  seeds = 0;
+  collected = [];
+  lanes = getLaneConfig(level);
+  seedPositions = placeSeedPositions();
+  moveQueue = { up:false, down:false, left:false, right:false };
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (gameState !== 'playing') return;
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': moveQueue.up=true; break;
+    case 'ArrowDown': case 's': case 'S': moveQueue.down=true; break;
+    case 'ArrowLeft': case 'a': case 'A': moveQueue.left=true; break;
+    case 'ArrowRight': case 'd': case 'D': moveQueue.right=true; break;
+  }
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': moveQueue.up=false; break;
+    case 'ArrowDown': case 's': case 'S': moveQueue.down=false; break;
+    case 'ArrowLeft': case 'a': case 'A': moveQueue.left=false; break;
+    case 'ArrowRight': case 'd': case 'D': moveQueue.right=false; break;
+  }
+});
+
+function setupMobileBtn(id, dir) {
+  const btn = document.getElementById(id);
+  ['touchstart','mousedown'].forEach(ev => btn.addEventListener(ev, e => {
+    e.preventDefault(); moveQueue[dir]=true;
+  }));
+  ['touchend','mouseup','touchcancel'].forEach(ev => btn.addEventListener(ev, e => {
+    e.preventDefault(); moveQueue[dir]=false;
+  }));
+}
+setupMobileBtn('btnUp','up');
+setupMobileBtn('btnDown','down');
+setupMobileBtn('btnLeft','left');
+setupMobileBtn('btnRight','right');
+
+// ── Drawing ────────────────────────────────────────────────────────────────
+const scaleX = () => W / (COLS * TILE);
+const scaleY = () => H / (ROWS * TILE);
+
+function tileX(col) { return col * TILE * scaleX(); }
+function tileY(row) { return row * TILE * scaleY(); }
+function tw() { return TILE * scaleX(); }
+function th() { return TILE * scaleY(); }
+
+function drawLane(lane) {
+  const y = tileY(lane.row);
+  const h = th();
+  const s = scaleX();
+  if (lane.type === 'grass') {
+    ctx.fillStyle = '#3a7d44';
+    ctx.fillRect(0, y, W, h);
+    ctx.fillStyle = '#2e6636';
+    for(let i=0;i<COLS;i++) {
+      if((i+lane.row)%2===0) ctx.fillRect(tileX(i), y, tw(), h);
+    }
+  } else if (lane.type === 'road') {
+    ctx.fillStyle = '#555';
+    ctx.fillRect(0, y, W, h);
+    ctx.setLineDash([tw()*0.5, tw()*0.5]);
+    ctx.strokeStyle = '#fff9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, y + h/2);
+    ctx.lineTo(W, y + h/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (lane.type === 'train') {
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(0, y, W, h);
+    // rails
+    ctx.fillStyle = '#aaa';
+    ctx.fillRect(0, y + h*0.2, W, h*0.12);
+    ctx.fillRect(0, y + h*0.68, W, h*0.12);
+    // ties
+    ctx.fillStyle = '#6b3a1f';
+    for(let i=0;i<COLS*2;i++) {
+      const tx = i * tw()*0.55;
+      ctx.fillRect(tx, y + h*0.12, tw()*0.3, h*0.76);
+    }
+  }
+}
+
+function drawVehicle(lane, vx) {
+  const y = tileY(lane.row);
+  const h = th();
+  const s = scaleX();
+  const dir = lane.speed > 0 ? 1 : -1;
+  const vw = lane.vehicleW * s;
+  if (lane.type === 'road') {
+    // Car body
+    ctx.save();
+    ctx.fillStyle = dir>0 ? '#e74c3c' : '#3498db';
+    const bh = h*0.62;
+    const by = y + (h-bh)/2;
+    const r = bh*0.3;
+    // rounded rect
+    ctx.beginPath();
+    ctx.moveTo(vx+r, by);
+    ctx.lineTo(vx+vw-r, by);
+    ctx.quadraticCurveTo(vx+vw, by, vx+vw, by+r);
+    ctx.lineTo(vx+vw, by+bh-r);
+    ctx.quadraticCurveTo(vx+vw, by+bh, vx+vw-r, by+bh);
+    ctx.lineTo(vx+r, by+bh);
+    ctx.quadraticCurveTo(vx, by+bh, vx, by+bh-r);
+    ctx.lineTo(vx, by+r);
+    ctx.quadraticCurveTo(vx, by, vx+r, by);
+    ctx.fill();
+    // windshield
+    ctx.fillStyle = '#aef';
+    if(dir>0) ctx.fillRect(vx+vw*0.55, by+bh*0.1, vw*0.25, bh*0.45);
+    else ctx.fillRect(vx+vw*0.2, by+bh*0.1, vw*0.25, bh*0.45);
+    // wheels
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(vx+vw*0.2, by+bh, bh*0.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(vx+vw*0.8, by+bh, bh*0.2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  } else if (lane.type === 'train') {
+    ctx.save();
+    const bh = h*0.8;
+    const by = y + (h-bh)/2;
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(vx, by, vw, bh);
+    // windows
+    ctx.fillStyle = '#aef';
+    const wc = Math.max(1, Math.floor(vw/(tw()*0.55)));
+    for(let w=0;w<wc;w++) {
+      ctx.fillRect(vx + w*(vw/wc) + (vw/wc)*0.15, by+bh*0.15, (vw/wc)*0.55, bh*0.4);
+    }
+    // stripe
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(vx, by+bh*0.6, vw, bh*0.12);
+    ctx.restore();
+  }
+}
+
+function drawChicken(col, row) {
+  const x = tileX(col) + tw()*0.1;
+  const y = tileY(row) + th()*0.05;
+  const w = tw()*0.8, h = th()*0.9;
+  ctx.save();
+  // body
+  ctx.fillStyle = '#f5d76e';
+  ctx.beginPath();
+  ctx.ellipse(x+w/2, y+h*0.58, w*0.4, h*0.35, 0, 0, Math.PI*2);
+  ctx.fill();
+  // head
+  ctx.fillStyle = '#f5d76e';
+  ctx.beginPath();
+  ctx.arc(x+w/2, y+h*0.22, h*0.2, 0, Math.PI*2);
+  ctx.fill();
+  // comb
+  ctx.fillStyle = '#e74c3c';
+  ctx.beginPath();
+  ctx.arc(x+w*0.5, y+h*0.05, h*0.1, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+w*0.42, y+h*0.08, h*0.07, 0, Math.PI*2);
+  ctx.fill();
+  // beak
+  ctx.fillStyle = '#e67e22';
+  ctx.beginPath();
+  ctx.moveTo(x+w*0.68, y+h*0.23);
+  ctx.lineTo(x+w*0.82, y+h*0.2);
+  ctx.lineTo(x+w*0.68, y+h*0.28);
+  ctx.fill();
+  // eye
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(x+w*0.6, y+h*0.18, h*0.04, 0, Math.PI*2);
+  ctx.fill();
+  // wings
+  ctx.fillStyle = '#e8c84a';
+  ctx.beginPath();
+  ctx.ellipse(x+w*0.18, y+h*0.58, w*0.13, h*0.22, -0.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSeed(col, row) {
+  const x = tileX(col) + tw()/2;
+  const y = tileY(row) + th()/2;
+  const r = tw()*0.18;
+  ctx.save();
+  ctx.fillStyle = '#8B4513';
+  ctx.beginPath();
+  ctx.ellipse(x, y, r, r*1.6, 0.4, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#a0522d';
+  ctx.beginPath();
+  ctx.ellipse(x-r*0.2, y-r*0.3, r*0.4, r*0.5, 0.4, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFrame() {
+  const sc = { x: scaleX(), y: scaleY() };
+  ctx.clearRect(0, 0, W, H);
+
+  // start zone
+  ctx.fillStyle = '#27ae60';
+  ctx.fillRect(0, tileY(ROWS-1), W, th());
+  ctx.fillStyle = '#1a7a3c';
+  ctx.font = `${th()*0.45}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('START', W/2, tileY(ROWS-1)+th()/2);
+
+  // finish zone
+  ctx.fillStyle = '#27ae60';
+  ctx.fillRect(0, 0, W, th());
+  // checkerboard
+  const cs = th()/2;
+  for(let i=0;i<Math.ceil(W/cs);i++) {
+    for(let j=0;j<2;j++) {
+      if((i+j)%2===0) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(i*cs, j*cs, cs, cs);
+      }
+    }
+  }
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${th()*0.45}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (seeds >= 5) {
+    ctx.fillText('🏁 FINISH', W/2, th()/2);
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, th());
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`Need ${5-seeds} more 🌾`, W/2, th()/2);
+  }
+
+  // lanes
+  lanes.forEach(lane => drawLane(lane));
+
+  // vehicles
+  lanes.forEach(lane => {
+    lane.vehicles.forEach(v => {
+      let x = v.x * sc.x;
+      const span = (W + lane.vehicleW * sc.x * 2);
+      x = ((x % span) + span) % span - lane.vehicleW * sc.x;
+      drawVehicle(lane, x);
+    });
+  });
+
+  // seeds
+  seedPositions.forEach((s, i) => {
+    if (!collected.includes(i)) drawSeed(s.col, s.row);
+  });
+
+  // chicken
+  drawChicken(chicken.col, chicken.row);
+
+  // update HUD
+  document.getElementById('hudLevel').textContent = level;
+  document.getElementById('hudSeeds').textContent = seeds;
+  document.getElementById('hudLives').textContent = '❤️'.repeat(lives);
+  document.getElementById('hudCoins').textContent = coins;
+}
+
+// ── Game Logic ─────────────────────────────────────────────────────────────
+let lastTime = 0;
+let moveTime = 0;
+
+function processMove(now) {
+  if (now - moveTime < MOVE_DELAY) return;
+  let moved = false;
+  if (moveQueue.up && chicken.row > 0) { chicken.row--; moved = true; }
+  else if (moveQueue.down && chicken.row < ROWS-1) { chicken.row++; moved = true; }
+  else if (moveQueue.left && chicken.col > 0) { chicken.col--; moved = true; }
+  else if (moveQueue.right && chicken.col < COLS-1) { chicken.col++; moved = true; }
+  if (moved) {
+    moveTime = now;
+    sfxCluck();
+  }
+}
+
+function checkSeedCollection() {
+  seedPositions.forEach((s, i) => {
+    if (!collected.includes(i) && s.col === chicken.col && s.row === chicken.row) {
+      collected.push(i);
+      seeds++;
+      sfxSeed();
+    }
+  });
+}
+
+function checkFinish() {
+  if (chicken.row === 0 && seeds >= 5) {
+    gameState = 'levelup';
+    stopMusic();
+    sfxLevelUp();
+    setTimeout(() => sfxCoin(), 600);
+    coins += 10;
+    showLevelUp();
+  }
+}
+
+function getChickenBounds() {
+  const x = tileX(chicken.col) + tw()*0.2;
+  const y = tileY(chicken.row) + th()*0.15;
+  const w = tw()*0.6;
+  const h = th()*0.7;
+  return { x, y, w, h };
+}
+
+function checkCollisions() {
+  const cb = getChickenBounds();
+  const sc = scaleX();
+  for (const lane of lanes) {
+    if (lane.row !== chicken.row) continue;
+    for (const v of lane.vehicles) {
+      const span = W + lane.vehicleW * sc * 2;
+      let vx = ((v.x * sc % span) + span) % span - lane.vehicleW * sc;
+      const vw = lane.vehicleW * sc;
+      const vy = tileY(lane.row) + th()*0.05;
+      const vh = th()*0.9;
+      if (cb.x < vx+vw && cb.x+cb.w > vx && cb.y < vy+vh && cb.y+cb.h > vy) {
+        if (lane.type === 'train') sfxTrain(); else sfxHorn();
+        setTimeout(sfxDie, 150);
+        onDie();
+        return;
+      }
+    }
+  }
+}
+
+function onDie() {
+  lives--;
+  gameState = 'dead';
+  if (lives <= 0) {
+    // offer revive
+    showReviveOrGameOver();
+  } else {
+    showDeathScreen();
+  }
+}
+
+function showDeathScreen() {
+  overlay.innerHTML = `
+    <h2>💀 Oops!</h2>
+    <p>Lives remaining: ${'❤️'.repeat(lives)}</p>
+    <button class="btn btn-green" onclick="respawn()">▶ Try Again</button>
+  `;
+  overlay.style.display = 'flex';
+}
+
+function showReviveOrGameOver() {
+  if (coins >= 20) {
+    overlay.innerHTML = `
+      <h2>💀 No Lives Left!</h2>
+      <p>Revive at the start of Level ${level}?</p>
+      <p>Cost: 🪙 20 coins (you have ${coins})</p>
+      <button class="btn btn-gold" onclick="revive()">✨ Revive (20 coins)</button>
+      <button class="btn btn-red" onclick="gameOver()">❌ Give Up</button>
+    `;
+  } else {
+    overlay.innerHTML = `
+      <h2>💀 Game Over!</h2>
+      <p>You need 20 🪙 coins to revive (you have ${coins}).</p>
+      <button class="btn btn-blue" onclick="restartGame()">🔄 Restart</button>
+    `;
+  }
+  overlay.style.display = 'flex';
+}
+
+function showLevelUp() {
+  overlay.innerHTML = `
+    <h2>🎉 Level ${level} Complete!</h2>
+    <p>+10 🪙 coins! You now have ${coins} coins.</p>
+    ${level >= 100 ? '<p style="color:#ffd700;font-size:1.2em">🏆 YOU WIN THE GAME!</p>' : ''}
+    <button class="btn btn-green" onclick="nextLevel()">${level>=100 ? '🏆 Play Again' : '▶ Level '+(level+1)}</button>
+  `;
+  overlay.style.display = 'flex';
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  overlay.innerHTML = `
+    <h2>Game Over</h2>
+    <p>You reached Level ${level} with ${coins} 🪙 coins.</p>
+    <button class="btn btn-green" onclick="restartGame()">🔄 Restart</button>
+  `;
+  overlay.style.display = 'flex';
+}
+
+function respawn() {
+  overlay.style.display = 'none';
+  chicken = { col: 4, row: ROWS-1 };
+  moveQueue = { up:false, down:false, left:false, right:false };
+  gameState = 'playing';
+  startMusic();
+}
+
+function revive() {
+  sfxRevive();
+  coins -= 20;
+  lives = 3;
+  overlay.style.display = 'none';
+  initLevel();
+  gameState = 'playing';
+  startMusic();
+}
+
+function nextLevel() {
+  if (level >= 100) { restartGame(); return; }
+  level++;
+  lives = 3;
+  overlay.style.display = 'none';
+  initLevel();
+  gameState = 'playing';
+  startMusic();
+}
+
+function restartGame() {
+  level = 1; coins = 0; lives = 3; seeds = 0;
+  overlay.style.display = 'none';
+  initLevel();
+  gameState = 'playing';
+  startMusic();
+}
+
+function startGame() {
+  overlay.style.display = 'none';
+  level = 1; coins = 0; lives = 3;
+  initLevel();
+  gameState = 'playing';
+  startMusic();
+  requestAnimationFrame(loop);
+}
+
+// ── Game Loop ──────────────────────────────────────────────────────────────
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  if (gameState === 'playing') {
+    processMove(now);
+    // update vehicle positions
+    lanes.forEach(lane => {
+      const sc = scaleX();
+      const span = (W + lane.vehicleW * sc * 2) / sc;
+      lane.vehicles.forEach(v => {
+        v.x += lane.speed * dt * TILE;
+        v.x = ((v.x % span) + span) % span;
+      });
+    });
+    checkSeedCollection();
+    checkFinish();
+    if (gameState === 'playing') checkCollisions();
+  }
+
+  drawFrame();
+  requestAnimationFrame(loop);
+}
+
+// start the render loop immediately (menu state)
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
