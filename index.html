@@ -78,7 +78,7 @@
   .btn-gold { background: #f39c12; color: #fff; }
   .btn-red { background: #e74c3c; color: #fff; }
   .btn-blue { background: #2980b9; color: #fff; }
-  /* D-pad floats over the bottom of the canvas — always within the visible game area */
+  /* Controls float over the bottom of the canvas as a single horizontal row */
   #mobileControls {
     display: none;
     position: absolute;
@@ -89,9 +89,12 @@
     background: rgba(0,0,0,0.35);
     border-radius: 12px;
     padding: 6px;
+    flex-direction: row;
+    gap: 6px;
   }
-  .dpad { display: grid; grid-template-columns: 54px 54px 54px; grid-template-rows: 54px 54px 54px; gap: 4px; }
   .dpad-btn {
+    width: 58px;
+    height: 48px;
     background: rgba(255,255,255,0.18);
     border: 2px solid rgba(255,255,255,0.35);
     border-radius: 10px;
@@ -105,13 +108,12 @@
     -webkit-user-select: none;
   }
   .dpad-btn:active { background: rgba(255,255,255,0.45); }
-  .dpad-empty { background: transparent; border: none; }
   @media (max-width: 520px) {
-    #mobileControls { display: block; }
+    #mobileControls { display: flex; }
     #hud { font-size: 12px; }
   }
   @media (pointer: coarse) {
-    #mobileControls { display: block; }
+    #mobileControls { display: flex; }
   }
 </style>
 </head>
@@ -132,17 +134,10 @@
     <button class="btn btn-green" onclick="startGame()">▶ Play</button>
   </div>
   <div id="mobileControls">
-    <div class="dpad">
-      <div class="dpad-empty"></div>
-      <div class="dpad-btn" id="btnUp">▲</div>
-      <div class="dpad-empty"></div>
-      <div class="dpad-btn" id="btnLeft">◄</div>
-      <div class="dpad-empty"></div>
-      <div class="dpad-btn" id="btnRight">►</div>
-      <div class="dpad-empty"></div>
-      <div class="dpad-btn" id="btnDown">▼</div>
-      <div class="dpad-empty"></div>
-    </div>
+    <div class="dpad-btn" id="btnLeft">◄</div>
+    <div class="dpad-btn" id="btnDown">▼</div>
+    <div class="dpad-btn" id="btnUp">▲</div>
+    <div class="dpad-btn" id="btnRight">►</div>
   </div>
 </div>
 
